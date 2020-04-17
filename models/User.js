@@ -4,7 +4,8 @@ const userSchema = new Schema({
     username: String,
     email: String,
     password: String,
-    posts: Number
+    posts: Number,
+    refreshToken: String
 });
 
 const userModel = model('User', userSchema);

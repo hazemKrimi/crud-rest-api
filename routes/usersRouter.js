@@ -22,13 +22,42 @@ usersRouter.post('/login', async(req, res) => {
             const user = await User.findOne({ email: req.body.email });
             if (!user) throw new UserError(404, 'No user found');
             if (user.password !== crypto.createHmac('sha256', 'password').update(req.body.password).digest('hex')) throw new UserError(400, 'Invalid password');
-            const token = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, 'key');
-            if (!token) throw new UserError(500, 'Login error');
-            return res.status(200).json({ token });
+            const authToken = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, process.env.AUTH_TOKEN_SECRET, { expiresIn: '15min' });
+            const refreshToken = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, process.env.REFRESH_TOKEN_SECRET);
+            if (!authToken) throw new UserError(500, 'Login error');
+            if (!refreshToken) throw new UserError(500, 'Login error');
+            user.refreshToken = refreshToken;
+            await user.save();
+            return res.status(200).json({
+                authToken,
+                refreshToken
+            });
         }
     } catch(err) {
         return res.status(err.status).json({ message: err.msg });
     }
+});
+
+usersRouter.get('/logout', async(req, res) => {
+    if (!req.authenticated) throw new UserError(403, 'No logged in user');
+    const user = await User.findOne({ username: req.user.username });
+    if (!user) throw new UserError(500, 'Error logging out');
+    user.refreshToken = '';
+    await user.save();
+    return res.status(200).send('Logged out successfully');
+});
+
+usersRouter.get('/token', async(req, res) => {
+    if (!req.params || !req.params.refreshToken) throw new UserError(400, 'Missing refresh token');
+    const tokenUser = jwt.verify(req.params.refreshToken, process.env.REFRESH_TOKEN_SECRET);
+    if (!tokenUser) throw new UserError(403, 'Invalid token');
+    const user = await User.findOne({ refreshToken });
+    if (!user) throw new UserError(404, 'No user found');
+    const authToken = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, process.env.AUTH_TOKEN_SECRET, { expiresIn: '15min' });
+    return res.status(200).json({
+        authToken,
+        refreshToken
+    });
 });
 
 usersRouter.get('/', async(req, res) => {
@@ -64,11 +93,16 @@ usersRouter.post('/', async(req, res) => {
             const user = await User.findOne({ email: req.body.email });
             if (user) throw new UserError(400, 'User already exists');
             else {
-                const user = new User({ username: req.body.username, email: req.body.email, password: crypto.createHmac('sha256', 'password').update(req.body.password).digest('hex'), posts: 0 });
+                const refreshToken = jwt.sign({ username: req.body.username, email: req.body.email, posts: 0 }, process.env.REFRESH_TOKEN_SECRET);
+                const authToken = jwt.sign({ username: req.body.username, email: req.body.email, posts: 0 }, process.env.AUTH_TOKEN_SECRET, { expiresIn: '15min' });
+                if (!authToken) throw new UserError(500, 'Error creating user');
+                if (!refreshToken) throw new UserError(500, 'Error creating user');
+                const user = new User({ username: req.body.username, email: req.body.email, password: crypto.createHmac('sha256', 'password').update(req.body.password).digest('hex'), posts: 0, refreshToken });
                 await user.save();
-                const token = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, 'key', { expiresIn: '1h' });
-                if (!token) throw new UserError(500, 'Error creating user');
-                return res.status(200).json({ token });
+                return res.status(200).json({
+                    authToken,
+                    refreshToken
+                });
             }
         }
     } catch(err) {
@@ -83,7 +117,7 @@ usersRouter.put('/', async(req, res) => {
         if (!req.body) throw new UserError(400, 'Missing user data');
         if (!req.body.username && !req.body.email && !req.body.password) throw new UserError(400, 'Missing user data');
         const user = await User.findOne({ username: req.user.username });
-        if (!user) throw new UserError(500, 'Error updating user');
+        if (!user) throw new UserError(404, 'No user found');
         if (req.body.username) {
             const u = await User.findOne({ username: req.body.username });
             if (u) throw new UserError(400, 'Username already exists');
@@ -96,10 +130,16 @@ usersRouter.put('/', async(req, res) => {
             user.email = req.body.email;
         }
         if (req.body.password) user.password = crypto.createHmac('sha256', 'password').update(req.body.password).digest('hex');
+        const refreshToken = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, process.env.REFRESH_TOKEN_SECRET);
+        const authToken = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, process.env.AUTH_TOKEN_SECRET, { expiresIn: '15min' });
+        user.refreshToken = refreshToken;
         await user.save();
-        const token = jwt.sign({ username: user.username, email: user.email, posts: user.posts }, 'key', { expiresIn: '1h' });
-        if (!token) throw new UserError(500, 'Error updating user');
-        return res.status(200).json({ token });
+        if (!authToken) throw new UserError(500, 'Error updating user');
+        if (!refreshToken) throw new UserError(500, 'Error updating user');
+        return res.status(200).json({
+            authToken,
+            refreshToken
+        });
     } catch(err) {
         if (err instanceof UserError) return res.status(err.status).send({ message: err.msg });
         else return res.status(500).send({ message: 'Error updating user' });

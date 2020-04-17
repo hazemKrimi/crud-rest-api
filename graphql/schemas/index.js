@@ -6,6 +6,7 @@ module.exports = buildSchema(`
         username: String!
         email: String!
         password: String!
+        refreshToken: String!
         posts: Int!
     }
 
@@ -17,24 +18,27 @@ module.exports = buildSchema(`
     }
 
     type Token {
-        token: String!
+        authToken: String!
+        refreshToken: String!
     }
 
     type RootQuery {
         posts: [Post!]!
-        post(id: String!): Post
+        post(id: String!): Post!
         users: [User!]!
-        user(username: String!): User
-        login(email: String!, password: String!): Token
-        deleteUser: User
-        deletePost(id: String!): Post
+        user(username: String!): User!
+        login(email: String!, password: String!): Token!
+        token(refreshToken: String!): Token!
+        logout: String!
+        deleteUser: User!
+        deletePost(id: String!): Post!
     }
 
     type RootMutation {
-        createPost(title: String!, content: String!): Post
-        updatePost(id: String! title: String, content: String): Post
-        createUser(username: String!, email: String!, password: String!): Token
-        updateUser(username: String, email: String, password: String): Token
+        createPost(title: String!, content: String!): Post!
+        updatePost(id: String! title: String, content: String): Post!
+        createUser(username: String!, email: String!, password: String!): Token!
+        updateUser(username: String, email: String, password: String): Token!
     }
 
     schema {

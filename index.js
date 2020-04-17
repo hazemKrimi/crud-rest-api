@@ -9,6 +9,8 @@ const postsRouter = require('./routes/postsRouter');
 const usersRouter = require('./routes/usersRouter');
 const verifyToken = require('./middleware/verifyToken');
 
+require('dotenv').config();
+
 mongoose.connect('mongodb://localhost:27017/blog', { useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false });
 
 const app = express();
@@ -28,5 +30,7 @@ app.use((req, res) => {
     res.status(404).send('Route not found');
 });
 
-app.listen(5000, () => console.log('Server started on port 5000'));
-db.on('open', () => console.log('MongoDB database connected'));
+db.on('open', () => {
+    console.log('MongoDB database connected');
+    app.listen(5000, () => console.log('Server started on port 5000'));
+});
